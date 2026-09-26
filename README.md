@@ -11,7 +11,7 @@ navegador ──► reservas-frontend ──────► reservas-api ──�
 		React + Vite 	     Node 20 + Express 	      MySQL 8.4
 		nginx :8080 		   :3000 		:3306
 		(host 3000)           (host 3001, solo       (sin puerto
-					depuración)           publicado)
+						depuración)           publicado)
 
 | 	Capa 	      | 	Imagen                 | Puerto interno | Puerto publicado 	 |
 | ---  		      | ---         	 	       | ---  		| ---   	         |
