@@ -1,4 +1,5 @@
-# reservas-app
+## Semana 01
+## reservas-app
 
 Aplicacion web para la reserva de salas y laboratorios por franja horaria.
 
@@ -19,36 +20,105 @@ navegador ──► reservas-frontend ──────► reservas-api ──�
 | `reservas-api`      | Node 20 + Express              | 3000 		| 3001 (solo depuración) |
 | `reservas-db`       | MySQL 8.4 		       | 3306 		| — 		         |
 
-El frontend es el único punto de entrada: nadie le habla a la base
-directamente, y a la API le habla el frontend.
+El frontend es el único punto de entrada: nadie le habla a la base directamente, y a la API le habla el frontend.
 
-## Medición y comparación de imágenes
+## Semana 02
+### Imágenes construidas
 
-Para comparar las imágenes se utilizó la columna `CONTENT SIZE` informada por `docker images`, manteniendo la misma métrica en todos los casos.
-
-| Imagen | Imagen base final | Tamaño | Reducción respecto de `reservas-api:naive` |
+| Imagen | Imagen base | Tamaño | Reducción |
 | --- | --- | ---: | ---: |
 | `reservas-api:naive` | `node:20` | 402 MB | — |
 | `reservas-api:v1` | `node:20-alpine` | 50 MB | 87,6 % |
 | `reservas-frontend:v1` | `nginxinc/nginx-unprivileged:1.27-alpine` | 21 MB | 94,8 % |
 
-La reducción se calculó tomando como referencia la imagen ingenua de la API:
+Decisiones aplicadas:
 
-- API definitiva: `(402 MB - 50 MB) / 402 MB × 100 = 87,6 %`
-- Frontend: `(402 MB - 21 MB) / 402 MB × 100 = 94,8 %`
+- `node:20-alpine` reduce el tamaño de la API respecto de `node:20`.
+- El multi-stage permite dejar fuera de la imagen final archivos y herramientas innecesarias.
+- `npm ci --omit=dev` instala únicamente las dependencias necesarias en producción.
+- Copiar `package.json` y `package-lock.json` antes del código permite aprovechar el cache de construcción.
+- La API se ejecuta con el usuario no privilegiado `node`.
+- En el frontend, Node y Vite se utilizan solo para generar `dist/`; la imagen final utiliza nginx sin privilegios.
 
-### Decisiones adoptadas
+### Configuración de nginx
 
-- **Uso de `node:20-alpine` en la API:** reemplazar la imagen completa `node:20` por una base mínima redujo considerablemente el tamaño de la imagen final.
+```dockerfile
+ENV API_HOST=reservas-api \
+    API_PORT=3000 \
+    NGINX_ENVSUBST_FILTER=^API_
+```
 
-- **Construcción multi-etapa de la API:** permitió separar la instalación de dependencias de la etapa de ejecución y copiar a la imagen final únicamente los archivos necesarios para ejecutar la aplicación.
+`NGINX_ENVSUBST_FILTER=^API_` limita la sustitución a las variables `API_*` y evita que `envsubst` reemplace variables propias de nginx como `$uri`, `$host` o `$proxy_add_x_forwarded_for`.
 
-- **Uso de `npm ci --omit=dev`:** instaló únicamente las dependencias de producción definidas en `package-lock.json`, evitando dependencias de desarrollo innecesarias en runtime.
+### Verificación del frontend
 
-- **Copia de `package.json` y `package-lock.json` antes del código:** permite aprovechar el cache de Docker, de modo que la instalación de dependencias no se repita cuando cambia únicamente el código fuente.
+```bash
+docker run --rm reservas-frontend:v1 whoami
+```
 
-- **Uso de un usuario no privilegiado (`node`) en la API:** no reduce significativamente el tamaño, pero mejora la seguridad al evitar que la aplicación se ejecute como `root`.
+```text
+nginx
+```
 
-- **Multi-stage fuerte en el frontend:** Node, npm, Vite, `node_modules` y el código fuente se utilizan solamente durante la etapa de construcción; a la imagen final se copia únicamente el directorio `dist/`.
+```bash
+docker run --rm reservas-frontend:v1 node --version
+```
 
-- **Uso de `nginxinc/nginx-unprivileged:1.27-alpine`:** proporciona una imagen final mínima para servir los archivos estáticos y, además, ejecuta nginx con un usuario sin privilegios.
+```text
+node: not found
+```
+
+La primera prueba confirma que el contenedor no se ejecuta como `root` y la segunda que Node no está presente en la imagen final.
+
+### Análisis de capas
+
+```bash
+docker history --format '{{.Size}}\t{{.CreatedBy}}' reservas-api:v1 | grep -v '^0B'
+```
+
+```text
+24.6kB  COPY --chown=node:node server.js db.js ./
+49.2kB  COPY --chown=node:node package.json package-lock.json ./
+9.85MB  COPY --chown=node:node /app/node_modules ./node_modules
+8.19kB  WORKDIR /app
+20.5kB  COPY docker-entrypoint.sh /usr/local/bin/
+5.48MB  RUN /bin/sh -c apk add --no-cache ...
+130MB   RUN /bin/sh -c addgroup -g 1000 node && ...
+9.11MB  ADD alpine-minirootfs...
+```
+
+La capa de mayor tamaño es de aproximadamente `130 MB` y pertenece a la imagen base `node:20-alpine`. El código propio representa solo unos pocos KB.
+
+### Cache de construcción
+
+Al modificar únicamente `server.js`:
+
+```text
+COPY package.json package-lock.json ./    CACHED
+RUN npm ci --omit=dev                     CACHED
+COPY server.js db.js ./                   reconstruido
+```
+
+Al modificar `package.json`:
+
+```text
+COPY package.json package-lock.json ./    reconstruido
+RUN npm ci --omit=dev                     reconstruido
+```
+
+Los manifiestos se copian antes que el código para que los cambios en `server.js` o `db.js` no invaliden la instalación de dependencias. Si cambia `package.json`, la capa de `npm ci` debe reconstruirse.
+
+### Publicación en Docker Hub
+
+```bash
+docker tag reservas-api:v1 laureanoa/reservas-api:v1
+docker tag reservas-frontend:v1 laureanoa/reservas-frontend:v1
+
+docker push laureanoa/reservas-api:v1
+docker push laureanoa/reservas-frontend:v1
+```
+
+Imágenes publicadas:
+
+- `laureanoa/reservas-api:v1`
+- `laureanoa/reservas-frontend:v1`
