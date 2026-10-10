@@ -1,11 +1,11 @@
 ## Semana 01
-## reservas-app
+### reservas-app
 
 Aplicacion web para la reserva de salas y laboratorios por franja horaria.
 
 El proyecto utiliza una arquitectura de tres capas compuesta por un frontend desarrollado con React + Vite, una API REST desarrollada con Node.js + Express y una base de datos MySQL 8.4.
 
-## Arquitectura
+### Arquitectura
 
 navegador ──► reservas-frontend ──────► reservas-api ──────► reservas-db
 
@@ -122,3 +122,18 @@ Imágenes publicadas:
 
 - `laureanoa/reservas-api:v1`
 - `laureanoa/reservas-frontend:v1`
+
+## Semana 03
+## Orden de arranque
+
+El orden de arranque de la aplicación es:
+
+**red → volumen → base de datos → API → frontend**
+
+- **Red (`reservas-net`)**: debe existir antes de crear los contenedores que se conectan a ella. Si no existe, Docker no puede asociarlos a esa red.
+- **Volumen (`reservas-db-data`)**: se crea antes de la base para declarar explícitamente la persistencia. Con `-v`, Docker podría crearlo automáticamente si no existe, por lo que no produciría un error inmediato.
+- **Base de datos (`reservas-db`)**: debe estar inicializada y aceptando conexiones antes de iniciar la API. Si la API arranca antes, la conexión con MySQL puede fallar.
+- **API (`reservas-api`)**: debe estar disponible antes de iniciar el frontend. Si nginx no puede resolver `reservas-api` al arrancar, el frontend termina con el error `host not found in upstream`.
+- **Frontend (`reservas-frontend`)**: se inicia al final, cuando los servicios de los que depende ya están disponibles.
+
+Actualmente este orden debe respetarse manualmente y depende de quien levanta la aplicación. Todavía no existe un archivo ejecutable que describa y automatice estas dependencias; esta limitación se resolverá en la siguiente etapa con Docker Compose.
