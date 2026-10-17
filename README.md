@@ -278,8 +278,6 @@ docker compose down -v
 
 ### Variables de entorno y secretos
 
-### Variables de entorno y secretos
-
 Se agregó `.env.example` como contrato de las variables requeridas por las tres capas del sistema.
 
 Los valores reales se almacenan localmente en `.env`, archivo excluido mediante `.gitignore`, mientras que `docker-compose.yml` referencia las variables mediante `${VARIABLE}`. De esta forma, las credenciales no quedan versionadas directamente en el repositorio.
