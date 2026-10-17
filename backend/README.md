@@ -34,7 +34,7 @@ Escucha en el puerto **3000** (configurable con `PORT`).
 | `DB_PORT` | `3306` | Puerto de MySQL |
 | `DB_NAME` | `reservasdb` | Nombre de la base |
 | `DB_USER` | `reservas_user` | Usuario |
-| `DB_PASSWORD` | `reservas_pass` | Contraseña |
+| `DB_PASSWORD` | `change_me` | Contraseña |
 | `DB_POOL_SIZE` | `10` | Conexiones del pool |
 | `APP_VERSION` | `v1` | Lo que devuelve `/health` en `version` |
 | `SEED_DEMO` | `true` | Carga salas de ejemplo al arrancar. `false` para no hacerlo |
@@ -47,8 +47,8 @@ Escucha en el puerto **3000** (configurable con `PORT`).
 docker run -d --name reservas-db \
   -e MYSQL_DATABASE=reservasdb \
   -e MYSQL_USER=reservas_user \
-  -e MYSQL_PASSWORD=reservas_pass \
-  -e MYSQL_ROOT_PASSWORD=reservas_root_pass \
+  -e MYSQL_PASSWORD=change_me \
+  -e MYSQL_ROOT_PASSWORD=change_me_root \
   -p 3306:3306 \
   mysql:8.4
 ```
@@ -61,7 +61,7 @@ La primera vez tarda cerca de un minuto en aceptar conexiones.
 npm install
 
 export DB_HOST=localhost DB_PORT=3306
-export DB_NAME=reservasdb DB_USER=reservas_user DB_PASSWORD=reservas_pass
+export DB_NAME=reservasdb DB_USER=reservas_user DB_PASSWORD=change_me
 
 npm start
 ```
