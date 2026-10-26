@@ -417,3 +417,128 @@ docker compose down
 ```
 
 Esto hace que la configuración sea reproducible, versionable y más fácil de mantener que una secuencia de comandos manuales.
+
+---
+
+## Semana 05
+
+### Resultados de los experimentos
+
+**Descarga de imágenes**
+
+Se creó deliberadamente un Pod utilizando la imagen `reservas-api:v1` en lugar de `laureanoa/reservas-api:v1`. El Pod terminó en `ImagePullBackOff` y, mediante `kubectl describe`, se observó que el kubelet intentaba descargar `docker.io/library/reservas-api:v1`. Esto confirmó la necesidad de publicar las imágenes en un registry y utilizar su nombre completo.
+
+**Resolución de nombres entre Pods**
+
+La API fue configurada inicialmente con `DB_HOST=reservas-db`. El contenedor entró en `CrashLoopBackOff` y sus logs mostraron:
+
+```text
+getaddrinfo ENOTFOUND reservas-db
+```
+
+Un Pod no proporciona por sí mismo un nombre DNS estable para ser utilizado por otros Pods. Esa función será proporcionada posteriormente por un Service.
+
+**IP efímera de los Pods**
+
+Para comprobar la conectividad se configuró temporalmente la API con la IP `10.244.0.7` del Pod `reservas-db`, logrando conectarse correctamente a MySQL.
+
+Luego se eliminó y recreó el Pod de base de datos. Su dirección cambió de:
+
+```text
+10.244.0.7
+```
+
+a:
+
+```text
+10.244.0.12
+```
+
+La API continuó intentando acceder a la dirección anterior y obtuvo:
+
+```text
+connect EHOSTUNREACH 10.244.0.7:3306
+```
+
+Esto demuestra que la dirección IP de un Pod es efímera y no debe utilizarse como punto estable de configuración.
+
+Al finalizar el experimento, `DB_HOST` se restauró a `reservas-db` para dejar el manifiesto preparado para incorporar un Service.
+
+**Resolución de la API desde el frontend**
+
+El frontend entró en `CrashLoopBackOff`. Los logs de nginx mostraron:
+
+```text
+host not found in upstream "reservas-api"
+```
+
+En Docker Compose un problema similar había ocurrido por la configuración de la red Docker. En Kubernetes la causa es diferente: todavía no existe un Service que proporcione un nombre DNS estable para `reservas-api`.
+
+**Acceso temporal mediante port-forward**
+
+Se utilizó:
+
+```bash
+kubectl port-forward pod/reservas-api 3001:3000
+```
+
+y se verificó el funcionamiento de la API desde la máquina local:
+
+```bash
+curl -s localhost:3001/health
+curl -s localhost:3001/reservas
+```
+
+El endpoint `/health` respondió correctamente con el estado de la API y la base de datos, y `/reservas` devolvió las reservas almacenadas. `port-forward` resultó útil para pruebas y depuración, pero no constituye un mecanismo permanente de publicación de la aplicación.
+
+**Eliminación de un Pod standalone**
+
+Finalmente se eliminó manualmente `reservas-api`. El Pod desapareció y Kubernetes no volvió a crearlo. Esto demuestra que un Pod standalone no posee un controlador que mantenga el estado deseado; esa responsabilidad corresponderá posteriormente a recursos como Deployments y ReplicaSets.
+
+### Cheatsheet kubectl
+
+Durante esta etapa del trabajo se utilizaron los siguientes comandos:
+
+| Comando | Utilidad |
+|---|---|
+| `kubectl config current-context` | Muestra el contexto de Kubernetes actualmente seleccionado y permite verificar sobre qué clúster se está trabajando. |
+| `kubectl create namespace reservas-app` | Crea el namespace `reservas-app` para aislar lógicamente los recursos de la aplicación. |
+| `kubectl config set-context --current --namespace=reservas-app` | Configura `reservas-app` como namespace predeterminado del contexto actual. |
+| `kubectl run <nombre> --image=<imagen> --dry-run=client -o yaml` | Genera un manifiesto YAML de un Pod sin crearlo realmente en el clúster. |
+| `kubectl apply -f <archivo.yaml>` | Crea o aplica de forma declarativa el recurso definido en un manifiesto YAML. |
+| `kubectl get pods -o wide` | Muestra los Pods junto con información adicional, como su IP y el nodo donde están ejecutándose. |
+| `kubectl get pods -w` | Observa en tiempo real los cambios de estado de los Pods. |
+| `kubectl describe pod <nombre>` | Muestra información detallada de un Pod, incluyendo estado, configuración y eventos útiles para diagnóstico. |
+| `kubectl logs <nombre>` | Muestra los logs generados por el contenedor de un Pod; con `--previous` permite intentar consultar la instancia anterior del contenedor. |
+| `kubectl port-forward pod/<nombre> <puerto-local>:<puerto-pod>` | Crea temporalmente un túnel desde un puerto local hacia un puerto del Pod para realizar pruebas o depuración. |
+
+### Comparación con Docker Compose
+
+Al migrar la aplicación desde `docker-compose.yml` hacia Pods de Kubernetes se conservaron varios elementos de configuración, pero también desaparecieron funcionalidades que todavía no fueron reemplazadas.
+
+**Elementos que se conservaron**
+
+- La aplicación continúa separada en tres componentes: base de datos, API y frontend.
+- Se mantienen las mismas imágenes principales: MySQL 8.4 y las imágenes publicadas de `reservas-api` y `reservas-frontend`.
+- Se conservan las variables de entorno necesarias para configurar cada componente.
+- Cada contenedor continúa utilizando su puerto interno correspondiente: MySQL en `3306`, API en `3000` y frontend en `8080`.
+
+**Elementos que desaparecieron**
+
+- La red `reservas-net` definida en Docker Compose ya no aparece en los manifiestos. Kubernetes proporciona su propio modelo de red entre Pods.
+- Desapareció `depends_on` con `condition: service_healthy`. Los Pods se crean independientemente y Kubernetes no espera que una aplicación esté lista antes de iniciar otra.
+- Los `healthcheck` definidos en Compose todavía no fueron reemplazados por probes de Kubernetes.
+- El volumen persistente `reservas-db-data` utilizado por MySQL no está definido en estos Pods, por lo que esta versión todavía no garantiza persistencia de los datos ante la recreación del Pod.
+- Los puertos publicados hacia el host mediante `ports` de Docker Compose tampoco tienen todavía un equivalente permanente. `containerPort` solamente describe el puerto utilizado por el contenedor y no publica el Pod fuera del clúster.
+
+**Elementos que todavía faltan**
+
+- Services que proporcionen nombres DNS y direcciones estables para acceder a `reservas-db` y `reservas-api`.
+- Controladores como Deployments/ReplicaSets que mantengan los Pods y los recreen automáticamente si son eliminados.
+- Probes de salud y disponibilidad que permitan distinguir entre un contenedor iniciado y una aplicación realmente preparada para recibir tráfico.
+- Una solución de almacenamiento persistente para MySQL.
+- Un mecanismo estable para exponer la aplicación fuera del clúster.
+
+Los experimentos realizados muestran por qué estos recursos son necesarios: el nombre de un Pod no funciona como DNS para otro Pod, su IP puede cambiar cuando se recrea y un Pod standalone eliminado no vuelve a aparecer automáticamente.
+
+---

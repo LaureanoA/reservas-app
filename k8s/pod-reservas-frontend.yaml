@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    run: reservas-frontend
+  name: reservas-frontend
+
+spec:
+  containers:
+    - name: reservas-frontend
+      image: laureanoa/reservas-frontend:v1
+
+      env:
+        - name: API_HOST
+          value: reservas-api
+
+        - name: API_PORT
+          value: "3000"
+
+      ports:
+        - containerPort: 8080
+
+  restartPolicy: Always
