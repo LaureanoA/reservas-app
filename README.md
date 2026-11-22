@@ -440,24 +440,24 @@ Un Pod no proporciona por sí mismo un nombre DNS estable para ser utilizado por
 
 **IP efímera de los Pods**
 
-Para comprobar la conectividad se configuró temporalmente la API con la IP `10.244.0.7` del Pod `reservas-db`, logrando conectarse correctamente a MySQL.
+Para comprobar la conectividad se configuró temporalmente la API con la IP `<IP_PRIVADA>` del Pod `reservas-db`, logrando conectarse correctamente a MySQL.
 
 Luego se eliminó y recreó el Pod de base de datos. Su dirección cambió de:
 
 ```text
-10.244.0.7
+<IP_PRIVADA>
 ```
 
 a:
 
 ```text
-10.244.0.12
+<IP_PRIVADA>
 ```
 
 La API continuó intentando acceder a la dirección anterior y obtuvo:
 
 ```text
-connect EHOSTUNREACH 10.244.0.7:3306
+connect EHOSTUNREACH <IP_PRIVADA>:3306
 ```
 
 Esto demuestra que la dirección IP de un Pod es efímera y no debe utilizarse como punto estable de configuración.
@@ -542,3 +542,222 @@ Al migrar la aplicación desde `docker-compose.yml` hacia Pods de Kubernetes se 
 Los experimentos realizados muestran por qué estos recursos son necesarios: el nombre de un Pod no funciona como DNS para otro Pod, su IP puede cambiar cuando se recrea y un Pod standalone eliminado no vuelve a aparecer automáticamente.
 
 ---
+
+## Semana 06 — Deployments, ReplicaSets y Services
+
+### Orden de despliegue
+
+Se comprobó que iniciar el Deployment del frontend sin crear
+previamente el Service reservas-api provoca el siguiente error:
+
+    nginx: [emerg] host not found in upstream "reservas-api"
+
+El problema se resolvió creando los tres Services antes de
+aplicar los Deployments.
+
+Se desplegaron correctamente:
+- reservas-db: 1 réplica.
+- reservas-api: 2 réplicas.
+- reservas-frontend: 2 réplicas.
+
+Los cinco Pods quedaron en estado Running, sin reinicios.
+
+### Verificación de endpoints
+
+Fecha de comprobación: 21/11/2026.
+Clúster: lamarillo.
+Namespace: reservas-app.
+
+Comando ejecutado:
+
+    kubectl get endpoints -n reservas-app
+
+Resultado:
+
+    NAME                ENDPOINTS                           AGE
+    reservas-api        <IP_PRIVADA>:3000,<IP_PRIVADA>:3000   15d
+    reservas-db         <IP_PRIVADA>:3306                    15d
+    reservas-frontend   <IP_PRIVADA>:8080,<IP_PRIVADA>:8080   15d
+
+Se verificó mediante kubectl get pods -o wide que las IP de
+los endpoints coinciden con las IP de los Pods correspondientes.
+
+Los selectors de los Services coinciden correctamente con
+las labels de los Pods.
+
+Los Services proporcionan nombres DNS y direcciones ClusterIP
+estables, evitando depender de las direcciones IP de los Pods.
+
+La advertencia de deprecación de Endpoints es esperada en
+Kubernetes v1.33 y posteriores. Su reemplazo es EndpointSlice.
+
+### Acceso a la aplicación mediante NodePort
+
+Se accedió correctamente a la aplicación desde el navegador
+mediante la VPN del curso:
+
+    http://<IP_DEL_NODO>:30301
+
+Se verificó:
+- Carga correcta del frontend.
+- Visualización de las cinco salas.
+- Indicador API v1.
+- Creación de una nueva reserva.
+- Conservación de la reserva al actualizar la página.
+
+La prueba confirma la comunicación entre las tres capas
+de la aplicación mediante los Services de Kubernetes,
+sin necesidad de utilizar port-forward.
+
+### Autoreparación de Pods
+
+Se eliminó manualmente una de las dos réplicas de la API,
+administrada por el Deployment `reservas-api`.
+
+Pod eliminado:
+`reservas-api-75d4f86895-6s2wj`
+
+Nuevo Pod creado automáticamente:
+`reservas-api-75d4f86895-pdnqw`
+
+El nuevo Pod pasó por los estados Pending, ContainerCreating
+y Running, alcanzando este último aproximadamente 20 segundos
+después de su creación.
+
+Se comprobó que:
+- El ReplicaSet recuperó las 2 réplicas deseadas.
+- El nuevo Pod recibió una dirección IP diferente.
+- El Service actualizó automáticamente sus endpoints.
+- La API volvió a responder correctamente al endpoint /health.
+- La comunicación con MySQL permaneció operativa.
+
+A diferencia del TP5, donde un Pod standalone eliminado no
+se recreaba, el ReplicaSet detectó la ausencia de una réplica
+y creó su reemplazo automáticamente.
+
+### Rolling Update y Rollback
+
+Se construyó y publicó en Docker Hub la imagen
+`laureanoa/reservas-api:v2`, utilizando el argumento de
+construcción `APP_VERSION=v2`.
+
+Se actualizó el Deployment `reservas-api` mediante
+`kubectl set image`.
+
+Durante el Rolling Update se observó:
+- Creación de un nuevo ReplicaSet para v2.
+- Inicio progresivo de los nuevos Pods.
+- Eliminación progresiva de los Pods anteriores.
+- Conservación del ReplicaSet de v1 con cero réplicas.
+
+El Deployment completó correctamente la actualización.
+La consulta al endpoint `/health` devolvió:
+
+    {"status":"ok","db":"ok","version":"v2"}
+
+Posteriormente se ejecutó:
+
+    kubectl rollout undo deployment/reservas-api -n reservas-app
+
+Kubernetes reutilizó el ReplicaSet original de v1,
+restableciendo sus dos réplicas.
+
+Se comprobó que el endpoint `/health` volvió a responder:
+
+    {"status":"ok","db":"ok","version":"v1"}
+
+Historial final:
+
+    REVISION  CHANGE-CAUSE
+    2         <none>
+    3         <none>
+
+Conclusión: los Deployments permiten actualizar progresivamente
+una aplicación y recuperar versiones anteriores sin reconstruir
+las imágenes Docker. El rollback genera una nueva revisión.
+
+### Escalado y prueba de concurrencia
+
+Se escaló el Deployment `reservas-api` de 2 a 3 réplicas.
+
+Se verificó que los tres Pods estuvieran en estado
+Running, sin reinicios.
+
+Posteriormente se realizaron 30 solicitudes POST en paralelo
+para reservar la misma combinación:
+
+- Sala: 1
+- Fecha: 2026-12-01
+- Franja: 5
+- Responsables: R1 a R30
+
+Resultados HTTP obtenidos:
+
+    1 201
+   29 409
+
+Se comprobó mediante una consulta SQL que existe
+exactamente una reserva para esa combinación.
+
+Resultado de SELECT COUNT(*): 1
+
+Conclusión:
+La integridad de los datos no depende de una consulta previa
+de disponibilidad, ya que distintas réplicas podrían consultar
+simultáneamente el mismo estado.
+
+La restricción UNIQUE (sala_id, fecha, franja) de MySQL
+garantiza que no se registren reservas duplicadas.
+
+### Limitación de persistencia de MySQL
+
+Se comprobó que el Deployment `reservas-db` no dispone
+de almacenamiento persistente.
+
+Antes de eliminar su Pod, la base de datos contenía una
+reserva de la prueba de concurrencia:
+
+    SELECT COUNT(*) ... → 1
+
+Se eliminó el Pod de MySQL mediante:
+
+    kubectl delete pod -l app=reservas-db -n reservas-app
+
+El ReplicaSet creó automáticamente un nuevo Pod, que
+alcanzó el estado Running.
+
+Los logs mostraron que MySQL volvió a inicializarse,
+creando la base de datos `reservasdb` y su usuario.
+
+Al intentar consultar nuevamente la reserva se obtuvo:
+
+    ERROR 1146 (42S02):
+    Table 'reservasdb.reservas' doesn't exist
+
+Esto demostró que se habían perdido tanto las reservas
+como las tablas del esquema.
+
+Para recuperar el funcionamiento de la aplicación
+se reinició progresivamente la API:
+
+    kubectl rollout restart deployment/reservas-api -n reservas-app
+
+Al arrancar, las réplicas ejecutaron nuevamente la función
+`initDb()`, definida en `backend/db.js`.
+
+Verificaciones finales:
+
+- Las tablas `salas` y `reservas` se reconstruyeron.
+- La consulta de la reserva anterior devolvió 0.
+- El endpoint `/health` respondió:
+  {"status":"ok","db":"ok","version":"v1"}
+
+Conclusión:
+Kubernetes garantiza que el ReplicaSet mantenga la
+cantidad deseada de Pods, pero no conserva automáticamente
+los datos almacenados dentro de ellos.
+
+Esta es una limitación conocida del despliegue actual.
+En la Semana 07 se resolverá incorporando almacenamiento
+persistente mediante PersistentVolume y
+PersistentVolumeClaim (PV/PVC).
