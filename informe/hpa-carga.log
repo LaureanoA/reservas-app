@@ -1,0 +1,24 @@
+$ kubectl get hpa reservas-api-hpa -n reservas-app -w
+NAME               REFERENCE                 TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+reservas-api-hpa   Deployment/reservas-api   cpu: 1%/50%   2         6         2          2m19s
+reservas-api-hpa   Deployment/reservas-api   cpu: 0%/50%   2         6         2          2m46s
+reservas-api-hpa   Deployment/reservas-api   cpu: 3%/50%   2         6         2          3m1s
+reservas-api-hpa   Deployment/reservas-api   cpu: 182%/50%   2         6         2          3m16s
+reservas-api-hpa   Deployment/reservas-api   cpu: 226%/50%   2         6         4          3m31s
+reservas-api-hpa   Deployment/reservas-api   cpu: 152%/50%   2         6         6          3m46s
+reservas-api-hpa   Deployment/reservas-api   cpu: 102%/50%   2         6         6          4m1s
+reservas-api-hpa   Deployment/reservas-api   cpu: 98%/50%    2         6         6          4m16s
+reservas-api-hpa   Deployment/reservas-api   cpu: 91%/50%    2         6         6          4m31s
+reservas-api-hpa   Deployment/reservas-api   cpu: 85%/50%    2         6         6          4m46s
+reservas-api-hpa   Deployment/reservas-api   cpu: 84%/50%    2         6         6          5m1s
+reservas-api-hpa   Deployment/reservas-api   cpu: 83%/50%    2         6         6          5m16s
+reservas-api-hpa   Deployment/reservas-api   cpu: 84%/50%    2         6         6          6m17s
+reservas-api-hpa   Deployment/reservas-api   cpu: 82%/50%    2         6         6          6m47s
+reservas-api-hpa   Deployment/reservas-api   cpu: 83%/50%    2         6         6          7m2s
+reservas-api-hpa   Deployment/reservas-api   cpu: 33%/50%    2         6         6          7m17s
+reservas-api-hpa   Deployment/reservas-api   cpu: 2%/50%     2         6         6          7m32s
+reservas-api-hpa   Deployment/reservas-api   cpu: 0%/50%     2         6         6          7m47s
+NAME               REFERENCE                 TARGETS       MINPODS   MAXPODS   REPLICAS   AGE
+reservas-api-hpa   Deployment/reservas-api   cpu: 1%/50%   2         6         2          13m
+reservas-api-hpa   Deployment/reservas-api   cpu: 0%/50%   2         6         2          13m
+reservas-api-hpa   Deployment/reservas-api   cpu: 1%/50%   2         6         2          14m

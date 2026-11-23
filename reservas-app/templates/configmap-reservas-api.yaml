@@ -1,0 +1,14 @@
+
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: reservas-api-config
+  namespace: {{ .Release.Namespace }}
+
+data:
+  DB_HOST: {{ .Values.config.api.dbHost | quote }}
+  DB_PORT: {{ .Values.config.api.dbPort | quote }}
+  DB_NAME: {{ .Values.config.api.dbName | quote }}
+  PORT: {{ .Values.config.api.port | quote }}
+  SEED_DEMO: {{ .Values.config.api.seedDemo | quote }}

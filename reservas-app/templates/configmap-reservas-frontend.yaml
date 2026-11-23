@@ -1,0 +1,11 @@
+
+apiVersion: v1
+kind: ConfigMap
+
+metadata:
+  name: reservas-frontend-config
+  namespace: {{ .Release.Namespace }}
+
+data:
+  API_HOST: {{ .Values.config.frontend.apiHost | quote }}
+  API_PORT: {{ .Values.config.frontend.apiPort | quote }}

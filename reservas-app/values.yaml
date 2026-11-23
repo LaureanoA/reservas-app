@@ -1,0 +1,53 @@
+api:
+  image:
+    repository: laureanoa/reservas-api
+    tag: v1
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+frontend:
+  image:
+    repository: laureanoa/reservas-frontend
+    tag: v1
+  replicaCount: 2
+  service:
+    port: 8080
+    nodePort: 30301
+
+db:
+  image:
+    repository: mysql
+    tag: "8.4"
+  replicaCount: 1
+  persistence:
+    size: 1Gi
+  auth:
+    user: "usuario_lab"
+    password: "clave_lab_reemplazar"
+    rootPassword: "clave_root_lab_reemplazar"
+
+hpa:
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 50
+
+ingress:
+  host: reservas.local
+
+config:
+  api:
+    dbHost: reservas-db
+    dbPort: "3306"
+    dbName: reservasdb
+    port: "3000"
+    seedDemo: "true"
+
+  frontend:
+    apiHost: reservas-api
+    apiPort: "3000"
