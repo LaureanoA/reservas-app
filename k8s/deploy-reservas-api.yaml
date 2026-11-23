@@ -22,27 +22,24 @@ spec:
         - name: reservas-api
           image: laureanoa/reservas-api:v1
 
+
+          envFrom:
+            - configMapRef:
+                name: reservas-api-config
+
           env:
-            - name: PORT
-              value: "3000"
-
-            - name: DB_HOST
-              value: reservas-db
-
-            - name: DB_PORT
-              value: "3306"
-
-            - name: DB_NAME
-              value: reservasdb
-
             - name: DB_USER
-              value: reservas_user
+              valueFrom:
+                secretKeyRef:
+                  name: reservas-db-secret
+                  key: MYSQL_USER
 
             - name: DB_PASSWORD
-              value: change_me
+              valueFrom:
+                secretKeyRef:
+                  name: reservas-db-secret
+                  key: MYSQL_PASSWORD
 
-            - name: SEED_DEMO
-              value: "true"
 
           ports:
             - containerPort: 3000

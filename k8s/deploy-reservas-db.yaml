@@ -22,18 +22,27 @@ spec:
         - name: reservas-db
           image: mysql:8.4
 
+          envFrom:
+            - secretRef:
+                name: reservas-db-secret
+
           env:
             - name: MYSQL_DATABASE
-              value: reservasdb
+              valueFrom:
+                configMapKeyRef:
+                  name: reservas-api-config
+                  key: DB_NAME
 
-            - name: MYSQL_USER
-              value: reservas_user
-
-            - name: MYSQL_PASSWORD
-              value: change_me
-
-            - name: MYSQL_ROOT_PASSWORD
-              value: change_me_root
 
           ports:
             - containerPort: 3306
+
+          volumeMounts:
+            - name: datos
+              mountPath: /var/lib/mysql
+              subPath: mysql
+
+      volumes:
+        - name: datos
+          persistentVolumeClaim:
+            claimName: reservas-db-pvc

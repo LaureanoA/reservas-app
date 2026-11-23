@@ -757,7 +757,165 @@ Kubernetes garantiza que el ReplicaSet mantenga la
 cantidad deseada de Pods, pero no conserva automáticamente
 los datos almacenados dentro de ellos.
 
-Esta es una limitación conocida del despliegue actual.
-En la Semana 07 se resolverá incorporando almacenamiento
-persistente mediante PersistentVolume y
-PersistentVolumeClaim (PV/PVC).
+Al finalizar el TP6, la ausencia de almacenamiento persistente
+constituía una limitación conocida. Esta limitación fue resuelta
+durante el TP7 mediante un PersistentVolumeClaim (PVC),
+comprobando que las reservas sobreviven a la recreación
+del Pod de MySQL.
+
+
+## TP7 — Inventario de objetos de Kubernetes
+
+Al finalizar la Semana 07, el proyecto cuenta con los
+siguientes 11 objetos principales en el namespace `reservas-app`.
+
+| Tipo | Nombre | Función |
+|---|---|---|
+| Deployment | `reservas-api` | Administra las réplicas de la API Express. |
+| Deployment | `reservas-db` | Administra la instancia MySQL que utiliza almacenamiento persistente. |
+| Deployment | `reservas-frontend` | Administra las réplicas del frontend React servido mediante Nginx. |
+| Service | `reservas-api` | Proporciona acceso interno y estable a la API mediante el puerto 3000. |
+| Service | `reservas-db` | Permite la comunicación interna con MySQL mediante el puerto 3306. |
+| Service | `reservas-frontend` | Expone el frontend mediante el puerto 8080 y NodePort 30301. |
+| ConfigMap | `reservas-api-config` | Almacena las variables no sensibles de la API. |
+| ConfigMap | `reservas-frontend-config` | Almacena la configuración del proxy Nginx hacia la API. |
+| Secret | `reservas-db-secret` | Almacena las credenciales de MySQL utilizadas por la base de datos y la API. |
+| PersistentVolumeClaim | `reservas-db-pvc` | Solicita 1 GiB de almacenamiento persistente en modo ReadWriteOnce. |
+| Ingress | `reservas-app-ingress` | Enruta las solicitudes a `reservas.local` hacia el Service del frontend. |
+
+**Total: 11 objetos principales.**
+
+Objetos adicionales:
+
+- `reservas-api-nodeport`: Service auxiliar de depuración de la API, creado en el TP6.
+- `kube-root-ca.crt`: ConfigMap generado y administrado por Kubernetes.
+
+El proyecto incorporará un Horizontal Pod Autoscaler (HPA)
+en la Semana 08, completando los 12 objetos previstos.
+
+## TP7 — Resolución y verificaciones
+
+### ConfigMaps y Secret
+
+Se crearon dos ConfigMaps:
+
+- `reservas-api-config`: DB_HOST, DB_PORT, DB_NAME, PORT y SEED_DEMO.
+- `reservas-frontend-config`: API_HOST y API_PORT.
+
+Se creó el Secret `reservas-db-secret` con tres claves:
+MYSQL_USER, MYSQL_PASSWORD y MYSQL_ROOT_PASSWORD.
+
+Se comprobó que Base64 es una codificación reversible,
+no un mecanismo de cifrado. Para proteger las credenciales
+se requieren controles RBAC y cifrado en reposo en etcd,
+o un gestor externo de secretos.
+
+El Secret no se almacena en el repositorio.
+
+### Refactorización de Deployments
+
+Los tres Deployments dejaron de contener valores
+literales de configuración.
+
+- API: utiliza envFrom.configMapRef y valueFrom.secretKeyRef.
+- Frontend: utiliza envFrom.configMapRef.
+- MySQL: utiliza envFrom.secretRef y valueFrom.configMapKeyRef.
+
+Un mismo Secret alimenta a MySQL y a Express.
+
+MySQL recibe MYSQL_USER y MYSQL_PASSWORD directamente.
+La API recibe esos valores como DB_USER y DB_PASSWORD,
+mediante secretKeyRef.
+
+Se comprobó que la API seguía respondiendo:
+
+    {"status":"ok","db":"ok","version":"v1"}
+
+### Almacenamiento persistente y subPath
+
+Se creó el PVC `reservas-db-pvc` con:
+- Capacidad: 1Gi.
+- Modo de acceso: ReadWriteOnce.
+- StorageClass: local-path.
+
+Inicialmente quedó en Pending porque la StorageClass
+utiliza WaitForFirstConsumer.
+
+Al crear un Pod BusyBox que consumía el PVC, el volumen
+fue aprovisionado y pasó a Bound.
+
+El Pod escritor creó el archivo `/datos/viejo.txt`.
+Posteriormente se eliminó el Pod, conservando el PVC.
+
+Al montar el volumen completo en `/var/lib/mysql`,
+MySQL falló con el error:
+
+    --initialize specified but the data directory
+    has files in it. Aborting.
+
+Se solucionó agregando al Deployment:
+
+    volumeMounts:
+      - name: datos
+        mountPath: /var/lib/mysql
+        subPath: mysql
+
+MySQL pudo inicializarse correctamente y comenzó a
+aceptar conexiones en el puerto 3306.
+
+### Prueba de persistencia
+
+Se creó una reserva desde el navegador:
+
+- ID: 7.
+- Sala: Laboratorio 1.
+- Fecha: 2026-12-01.
+- Franja: 5.
+- Responsable: Prueba PVC TP7.
+- Motivo: Verificar persistencia en Kubernetes.
+
+La reserva fue verificada directamente mediante SQL.
+
+Se eliminó el Pod de MySQL y Kubernetes creó
+automáticamente otro Pod.
+
+Sin reiniciar la API ni reconstruir las tablas, se
+consultó nuevamente la reserva con ID 7.
+
+Resultado: la reserva conservaba todos sus valores.
+
+Conclusión: el PVC permite conservar los archivos de
+MySQL independientemente del ciclo de vida de su Pod.
+
+### Ingress
+
+Se creó `reservas-app-ingress` con:
+
+- Host: reservas.local.
+- IngressClass: nginx.
+- Ruta: /.
+- Destino: reservas-frontend:8080.
+
+Se configuró el nombre reservas.local en /etc/hosts,
+apuntando a la EXTERNAL-IP del Ingress Controller.
+
+No se agregó una regla /api al Ingress porque Nginx,
+dentro del frontend, ya implementa ese proxy.
+
+Se verificaron dos rutas:
+
+    GET /reservas
+    HTTP 200 - Content-Type: text/html
+
+    GET /api/reservas
+    HTTP 200 - Content-Type: application/json
+
+La primera ruta devuelve el HTML de React mediante
+try_files y no demuestra que la API sea accesible.
+
+La segunda devuelve datos JSON de Express y permite
+comprobar el funcionamiento real del enrutamiento.
+
+Conclusión: un código HTTP 200 no basta para verificar
+que una solicitud alcanzó la API. También debe
+comprobarse el contenido de la respuesta.

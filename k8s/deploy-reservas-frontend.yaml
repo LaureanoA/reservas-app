@@ -22,12 +22,9 @@ spec:
         - name: reservas-frontend
           image: laureanoa/reservas-frontend:v1
 
-          env:
-            - name: API_HOST
-              value: reservas-api
-
-            - name: API_PORT
-              value: "3000"
+          envFrom:
+            - configMapRef:
+                name: reservas-frontend-config
 
           ports:
             - containerPort: 8080
