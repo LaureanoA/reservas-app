@@ -154,7 +154,7 @@ La aplicación no depende de que el navegador acceda directamente a la API ni a 
 
 ### 2.5. Evidencia visual complementaria de la entrega final
 
-El 23 de noviembre de 2026 se realizó una comprobación adicional del funcionamiento de la aplicación mediante el Ingress `reservas.local`.
+Durante la verificación final se realizó una comprobación adicional del funcionamiento de la aplicación mediante el Ingress `reservas.local`.
 
 Se accedió desde el navegador, se verificó el indicador `API v1` después del rollback de Helm y se creó una nueva reserva utilizando la interfaz web.
 
@@ -469,7 +469,7 @@ Durante la actualización se guardó una captura del navegador.
 
 ![Interfaz de reservas-app durante la ejecución de API v2](informe/api-v2.png)
 
-**Figura 1.** Captura de la aplicación durante la revisión 2 de Helm, con la API actualizada a v2.
+**Figura 2.** Captura de la aplicación durante la revisión 2 de Helm, con la API actualizada a v2.
 
 El frontend mantuvo su imagen `v1`, mientras que la API pasó a ejecutar `v2`.
 
@@ -873,6 +873,7 @@ Los registros generados durante el TP8 se encuentran en la carpeta `informe/`.
 | [helm-rollback.log](informe/helm-rollback.log) | Reversión a la revisión 1. |
 | [helm-historial.log](informe/helm-historial.log) | Historial de tres revisiones. |
 | [api-v2.png](informe/api-v2.png) | Captura del navegador durante la ejecución de API v2. |
+| [api-v1-reserva-ingress.png](informe/api-v1-reserva-ingress.png) | Captura de una reserva mediante Ingress con API v1 después del rollback. |
 
 El README conserva, además, los resultados y explicaciones de las pruebas realizadas durante las entregas anteriores.
 
