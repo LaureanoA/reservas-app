@@ -151,6 +151,21 @@ MySQL: reservas-db:3306
 
 La aplicación no depende de que el navegador acceda directamente a la API ni a MySQL.
 
+
+### 2.5. Evidencia visual complementaria de la entrega final
+
+El 23 de noviembre de 2026 se realizó una comprobación adicional del funcionamiento de la aplicación mediante el Ingress `reservas.local`.
+
+Se accedió desde el navegador, se verificó el indicador `API v1` después del rollback de Helm y se creó una nueva reserva utilizando la interfaz web.
+
+La siguiente captura permite observar el acceso mediante Ingress, la reserva registrada y la versión de la API.
+
+![Aplicación mediante Ingress, reserva creada y API v1](informe/api-v1-reserva-ingress.png)
+
+**Figura 1.** Funcionamiento de reservas-app mediante Ingress, con una reserva creada y la API ejecutando la versión v1 después del rollback.
+
+Esta prueba complementa los registros de Helm y las comprobaciones HTTP documentadas en las secciones anteriores.
+
 ---
 
 ## 3. Evidencia 2 — Escalado automático mediante HPA
